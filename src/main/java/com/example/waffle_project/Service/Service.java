@@ -9,12 +9,15 @@ import jakarta.servlet.http.HttpSession;
 import org.apache.catalina.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -51,12 +54,15 @@ public class Service {
 
     }
 
-    public UserDto userFind(String email) {
+    public ResponseEntity<?> userFind(String email) {
+        Map<String, String> response = new HashMap<>();
         UserEntity userEntity = userRepository.findByEmail(email); //email로 회원정보 조회
         if (userEntity == null) { //회원정보가 없을 경우
-            return null;
+            response.put("error", "해당 이메일로 조회된 유저가 없습니다.");
+            response.put("status", HttpStatus.BAD_REQUEST.toString());
+            return ResponseEntity.badRequest().body(response);
         } else { //회원정보가 있을 경우
-            return userEntity.toDto();
+            return ResponseEntity.ok(userEntity.toDto());
         }
     }
 
@@ -70,10 +76,13 @@ public class Service {
         }
     }
 
-    public String userLogin(UserDto userDto){
+    public ResponseEntity<?> userLogin(UserDto userDto){
+        Map<String, String> response = new HashMap<>(); //json 응답을 위한 맵
         UserEntity userEntity = userRepository.findByEmail(userDto.getEmail());
         if(userEntity == null){ //해당 이메일로 조회된 회원이 없다면
-            return null;
+            response.put("error", "해당 이메일로 조회된 회원이 없습니다.");
+            response.put("status", HttpStatus.BAD_REQUEST.toString());
+            return ResponseEntity.badRequest().body(response);
         } else {
             if(hash.matches(userDto.getPassword(), userEntity.getPassword())){ //패스워드가 일치한다면
                 String token;
@@ -82,9 +91,12 @@ public class Service {
                 String payload = utility.encrypt(userDto.getEmail(), utility.getEncryptKey()); //이메일을 암호화한 값
                 String signature = hash.encode(header + "/" + payload + "/" + utility.getTokenKey()); //header, payload, secretKey를 합쳐서 해쉬화
                 token = header + "." + payload + "." + signature; //header, payload, signature를 합쳐서 토큰 생성
-                return token;
+                response.put("token", token);
+                return ResponseEntity.ok(response);
             } else { //패스워드가 일치하지 않는다면
-                return null;
+                response.put("error", "비밀번호가 일치하지 않습니다.");
+                response.put("status", HttpStatus.UNAUTHORIZED.toString());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
             }
         }
     }
@@ -105,39 +117,44 @@ public class Service {
     }
 
     @Transactional
-    public UserDto userDelete(String email) {
+    public ResponseEntity<?> userDelete(String email) {
+        Map<String, String> response = new HashMap<>(); //json 응답을 위한 맵
         UserEntity userEntity = userRepository.findByEmail(email); //email로 회원정보 조회
 
         if (userEntity == null) {//회원정보가 없을 경우
-            return null;
+            response.put("error", "해당 이메일로 조회된 유저가 없습니다.");
+            response.put("status", HttpStatus.BAD_REQUEST.toString());
         } else { //회원정보가 있을 경우
-
-
             try{
                 userRepository.deleteByEmail(email); //해당 이메일로 회원정보 삭제
-                return userEntity.toDto();
-            } catch (Exception e) {
-                return null; //삭제에 실패했을 경우 null반환
+                return ResponseEntity.ok(userEntity.toDto());
+            } catch (Exception e) {//삭제에 실패했을 경우
+                response.put("error", e.getMessage());
+                response.put("status", HttpStatus.BAD_REQUEST.toString());
+                return ResponseEntity.badRequest().body(response);
             }
-
-
         }
+        return ResponseEntity.badRequest().body(response);
     }
 
     @Transactional
-    public UserDto userUpdate(UserDto userDto){
+    public ResponseEntity<?> userUpdate(UserDto userDto){
+        Map<String, String> response = new HashMap<>(); //json 응답을 위한 맵
         UserEntity userEntity = userRepository.findByEmail(userDto.getEmail()); //email로 회원정보 조회
-        if(userEntity == null){
-            return null; //회원정보가 없을 경우
+        if(userEntity == null){//회원정보가 없을 경우
+            response.put("error", "해당 이메일로 조회된 회원이 없습니다.");
+            response.put("status", HttpStatus.BAD_REQUEST.toString());
+            return ResponseEntity.badRequest().body(response);
         } else {
             userDto.setPassword(hash.encode(userDto.getPassword())); //비밀번호 해쉬화
             userRepository.save(userDto.toEntity()); //회원정보 업데이트
-            return userDto;
+            return ResponseEntity.ok(userDto);
         }
 
     }
 
     public ResponseEntity<?> sendSmsToFindEmail(UserDto userDto) {//메세지 보내는 부분
+        Map<String, String> response = new HashMap<>(); //json 응답을 위한 맵
         try {
             String name = userDto.getName();
             //수신번호 형태에 맞춰 "-"을 ""로 변환
@@ -153,11 +170,17 @@ public class Service {
             session.setAttribute("phoneNum", phoneNum);
             session.setAttribute("email", userDto.getEmail());
             //smsUtil.sendOne(phoneNum, verificationCode); //sms 전송 수행 코드 사용시 주석 해제
-
-            return ResponseEntity.ok(verificationCode);
+            response.put("verificationCode", verificationCode);
+            response.put("status", HttpStatus.OK.toString());
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.out.println("[sms/send Api error]\n에러 정보 : " + e.getMessage());
-            return ResponseEntity.badRequest().body("[sms/send Api error]\n에러 정보 : " + e.getMessage());
+
+            response.put("error", e.getMessage());
+            response.put("message", "number 값이 올바른지 확인하세요.");
+            response.put("status", HttpStatus.BAD_REQUEST.toString());
+
+            return ResponseEntity.badRequest().body(response);
         }
     }
 }
