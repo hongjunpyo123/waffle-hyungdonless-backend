@@ -92,6 +92,7 @@ public class Service {
                 String signature = hash.encode(header + "/" + payload + "/" + utility.getTokenKey()); //header, payload, secretKey를 합쳐서 해쉬화
                 token = header + "." + payload + "." + signature; //header, payload, signature를 합쳐서 토큰 생성
                 response.put("token", token);
+                response.put("status", HttpStatus.OK.toString());
                 return ResponseEntity.ok(response);
             } else { //패스워드가 일치하지 않는다면
                 response.put("error", "비밀번호가 일치하지 않습니다.");
