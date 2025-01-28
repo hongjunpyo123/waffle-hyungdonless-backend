@@ -137,24 +137,27 @@ public class Service {
 
     }
 
-    public ResponseEntity<?> sendSmsToFindEmail(UserDto userDto) { //메세지 보내는 부분
-        String name = userDto.getName();
-        //수신번호 형태에 맞춰 "-"을 ""로 변환
-        String phoneNum = userDto.getNumber().replaceAll("-","");
+    public ResponseEntity<?> sendSmsToFindEmail(UserDto userDto) {//메세지 보내는 부분
+        try {
+            String name = userDto.getName();
+            //수신번호 형태에 맞춰 "-"을 ""로 변환
+            String phoneNum = userDto.getNumber().replaceAll("-", "");
 
-        if(userRepository.findByEmail(userDto.getEmail()) != null){ //회원이 존재할 경우
-            return ResponseEntity.badRequest().body("이미 회원이 존재합니다.");
+            if (userRepository.findByEmail(userDto.getEmail()) != null) { //회원이 존재할 경우
+                return ResponseEntity.badRequest().body("이미 회원이 존재합니다.");
+            }
+
+            String verificationCode = smsUtil.generateRandomCode(); //인증코드 4자리 생성
+            session.setAttribute("code", verificationCode);
+            session.setAttribute("name", userDto.getName());
+            session.setAttribute("phoneNum", phoneNum);
+            session.setAttribute("email", userDto.getEmail());
+            //smsUtil.sendOne(phoneNum, verificationCode); //sms 전송 수행 코드 사용시 주석 해제
+
+            return ResponseEntity.ok(verificationCode);
+        } catch (Exception e) {
+            System.out.println("[sms/send Api error]\n에러 정보 : " + e.getMessage());
+            return ResponseEntity.badRequest().body("[sms/send Api error]\n에러 정보 : " + e.getMessage());
         }
-
-        String verificationCode = smsUtil.generateRandomCode(); //인증코드 4자리 생성
-        session.setAttribute("code", verificationCode);
-        session.setAttribute("name", userDto.getName());
-        session.setAttribute("phoneNum", phoneNum);
-        session.setAttribute("email", userDto.getEmail());
-        //smsUtil.sendOne(phoneNum, verificationCode); //sms 전송 수행 코드 사용시 주석 해제
-
-        return ResponseEntity.ok("전송 성공");
     }
-
-
 }
